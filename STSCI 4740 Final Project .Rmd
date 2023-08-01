@@ -1,0 +1,142 @@
+---
+title: "STSCI 4740 Final Project"
+author: "Emily Hur"
+date: "11/28/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+df <- read.csv("winequality-red.csv", sep=";", header=T)
+filtered_df<-df[-c(1,3,4,6,8)]
+range(df$quality)
+```
+
+```{r}
+library(dplyr)
+quality<-df$quality
+df %>% 
+    count(quality)
+```
+```{r}
+library(caret)
+library(ggplot2)
+num_samples=dim(filtered_df)[1]
+set.seed(1)
+train <- sample(num_samples, round(num_samples*.8))
+train_set=filtered_df[train,]
+test_set=filtered_df[-train,]
+features=c("volatile.acidity", "chlorides", "total.sulfur.dioxide", "pH", "sulphates", "alcohol")
+trControl <- trainControl(method  = "cv",
+                          number  = 5)
+fit <- train(quality ~ .,
+             method     = "knn",
+             tuneGrid   = expand.grid(k = 1:20),
+             trControl  = trControl,
+             data       = train_set)
+print(fit)
+```
+```{r}
+library(class)
+train.X<-train_set[features]
+test.X<-test_set[features]
+train.quality<-train_set$quality
+set.seed(0)
+knn.pred<-knn(train.X, test.X, train.quality, k=9)
+1-mean(knn.pred==test_set$quality)
+```
+
+
+```{r}
+normalized_data=data.frame(filtered_df)
+normalized_data[features]=scale(normalized_data[features])
+train_set_normalized=normalized_data[train,]
+test_set_normalized=normalized_data[-train,]
+train.X.normalized<-train_set_normalized[features]
+test.X.normalized<-test_set_normalized[features]
+train.quality<-train_set$quality
+set.seed(0)
+knn.pred2<-knn(train.X.normalized, test.X.normalized, train.quality, k=9)
+1-mean(knn.pred2==test_set$quality)
+```
+
+```{r}
+library(class)
+train.X<-subset(train_set, select = -c(quality))
+test.X<-subset(test_set, select = -c(quality))
+train.quality<-train_set$quality
+set.seed(0)
+knn.pred<-knn(train.X, test.X, train.quality, k=9)
+1-mean(knn.pred==test_set$quality)
+```
+```{r}
+library(e1071)
+labels<-test_set$quality
+nb.fit <- naiveBayes(quality ~., data=train_set)
+nb.class<-predict(nb.fit, test.X)
+1-mean(nb.class==test_set$quality)
+```
+```{r}
+table(nb.class, labels)
+```
+
+```{r}
+library(rpart)
+library(rpart.plot)
+tree <- rpart(quality ~., data = train_set, method = "class")
+y_pred = predict(tree, newdata = test.X, type="class")
+1-mean(y_pred==test_set$quality)
+```
+```{r}
+rpart.plot(tree)
+```
+
+```{r}
+library(e1071)
+modelsvm = svm(quality~.,train_set_normalized, kernel="radial")
+pred=predict(modelsvm, test.X.normalized)
+pred=round(pred)
+1-mean(pred==test_set_normalized$quality)
+```
+
+```{r}
+modelsvm = svm(quality~.,train_set_normalized, kernel="radial", gamma=2^.19)
+pred=predict(modelsvm, test.X.normalized)
+rounded_pred=round(pred)
+1-mean(rounded_pred==test_set_normalized$quality)
+quality<-test_set_normalized$quality
+
+```
+```{r}
+table(rounded_pred, labels)
+```
+
+```{r}
+
+length=dim(test_set_normalized)[1]
+compare<-function(pred, label){
+  accuracy = 0 
+  if (ceiling(pred)==label || floor(pred)==label){ 
+    accuracy = 1
+  }
+  return (accuracy)
+}
+
+sum=0
+for (index in 1:length){
+  sum= sum + compare(pred[index], quality[index])
+}
+1-(sum/length)
+```
+
+
+
